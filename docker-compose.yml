@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  llm:
+    build:
+      context: llm-backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - llm-backend/.env
+    expose:
+      - "8000"
+    networks:
+      - capdbreak-network
+
+  fastapi-app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - postgres-db
+    environment:
+      - DATABASE_URL=postgresql://capdbreak:capdbreak@postgres-db:5432/capdbreak
+    networks:
+      - capdbreak-network
+
+  postgres-db:
+    image: postgres:15
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: capdbreak
+      POSTGRES_PASSWORD: capdbreak
+      POSTGRES_DB: capdbreak
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - capdbreak-network
+
+  vite-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vite-frontend
+    volumes:
+      - vite-frontend-dist:/app/dist
+    networks:
+      - capdbreak-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    depends_on:
+      - vite-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - vite-frontend-dist:/usr/share/nginx/html:ro
+    networks:
+      - capdbreak-network
+
+  news-crawler:
+    build:
+      context: ./crawler
+      dockerfile: Dockerfile
+    container_name: news-crawler
+    depends_on:
+      - postgres-db
+    networks:
+      - capdbreak-network
+
+volumes:
+  pgdata:
+  vite-frontend-dist:
+
+networks:
+  capdbreak-network:
